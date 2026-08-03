@@ -1,34 +1,38 @@
-frappe.ui.ThemeSwitcher = class CustomThemeSwitcher extends frappe.ui.ThemeSwitcher {
-	constructor() {
-		super()
-	}
+// material_theme — Material Design 3 theme for Frappe v16
+//
+// v16 fix (2026-08-03): defer the override until Frappe has finished loading.
+//
+// Why: in v15, the original code at the top of this file ran synchronously
+// and overrode frappe.ui.ThemeSwitcher successfully. In v16, app_include_js
+// scripts run in <head> BEFORE Frappe's bundle defines the parent class —
+// so `extends frappe.ui.ThemeSwitcher` failed (parent was undefined) and
+// our override got overwritten when Frappe's bundle later defined the class.
+//
+// Fix: hook the override into Frappe's `app_ready` event (fired by
+// desk.js after frappe.Application.startup() completes). By then
+// frappe.ui.ThemeSwitcher exists and our subclass extends cleanly.
+//
+// This adds the Material theme card to the picker alongside
+// Frappe Light / Timeless Night / Automatic. Click handler calls
+// frappe.xcall('frappe.core.doctype.user.user.switch_theme', ...)
+// which is overridden in hooks.py to accept "Material".
 
-	fetch_themes() {
-		return new Promise((resolve) => {
-			this.themes = [
-				{
-					name: "light",
-					label: ("Frappe Light"),
-					info: ("Light Theme"),
-				},
-				{
-					name: "dark",
-					label: "Timeless Night",
-					info: "Dark Theme",
-				},
-				{
-					name: "material",
-					label: "Material by Itrostack",
-					info: "Theme By Itrostack LLP"
-				},
-				{
-					name: "automatic",
-					label: "Automatic",
-					info: "Uses system's theme to switch between light and dark mode",
+$(document).on("app_ready", function () {
+	if (!frappe.ui || !frappe.ui.ThemeSwitcher) return;
+
+	const Original = frappe.ui.ThemeSwitcher;
+	frappe.ui.ThemeSwitcher = class CustomThemeSwitcher extends Original {
+		fetch_themes() {
+			return super.fetch_themes().then(() => {
+				if (!this.themes.find((t) => t.name === "material")) {
+					this.themes.push({
+						name: "material",
+						label: "Material by Itrostack",
+						info: "Theme by Itrostack LLP",
+					});
 				}
-			];
-
-			resolve(this.themes);
-		});
-	}
-}
+				return this.themes;
+			});
+		}
+	};
+});
