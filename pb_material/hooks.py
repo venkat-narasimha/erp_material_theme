@@ -30,6 +30,7 @@ app_include_css = ["/assets/pb_material/css/material.css",
 app_include_js = [
                     "/assets/pb_material/js/material.js",
                     "/assets/pb_material/js/material-theme-customizer.js",
+                    "/assets/pb_material/js/theme-customizer-v16.js",
                     "/assets/pb_material/js/theme.js",]
 
 # include js, css files in header of web template
