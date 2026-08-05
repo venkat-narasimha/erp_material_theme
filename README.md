@@ -1,8 +1,8 @@
-## Material Theme
+# PB Material
 
-Material Theme by Itrostack LLP — Venkat's fork with v16 compatibility fixes.
+PB Material — Material Design 3 theme for Frappe v15 and v16.
 
-Making Frappe more colorful with Material Design.
+Maintained by Processbricks. Forked from [the upstream repo](https://github.com/itrostack/material_theme) (MIT, last upstream push 2025-08-04) with v16 compatibility fixes.
 
 ![sc_1](https://github.com/user-attachments/assets/e2268b1c-2610-4ee6-a307-df966d27bb82)
 ![sc_2](https://github.com/user-attachments/assets/f2b32ab8-d85c-4a24-a8f7-388d22e51270)
@@ -15,30 +15,22 @@ Making Frappe more colorful with Material Design.
 ## Quick install
 
 ```bash
-bench get-app https://github.com/venkat-narasimha/erp_material_theme.git
-bench --site <your-site> install-app material_theme
+bench get-app https://github.com/venkat-narasimha/pb-material.git
+bench --site <your-site> install-app pb_material
 bench build
 ```
 
 **For full installation, configuration, and troubleshooting guide, see [`INSTALLATION.md`](./INSTALLATION.md).**
-
-That doc covers:
-- Install on Frappe v15 + v16 (verified paths)
-- What the v16 patches change (and why they're also v15-safe)
-- Mandatory asset sync (per-directory `docker cp` pattern)
-- Six common pitfalls + fixes (asset volume shadowing, `ModuleNotFoundError`, nginx upstream hostname mismatches, missing `location /socket.io`, etc.)
-- Verify checklist
-- Troubleshooting table
 
 ---
 
 ## Versions
 
 Tested on:
-- Frappe v15.103.1 (dev-erp.duckdns.org)
-- Frappe v16.13.0 (pberpdev.duckdns.org)
-- Frappe v16.17.5 (pberpqa.duckdns.org)
+- Frappe v15.103.1
+- Frappe v16.13.0
+- Frappe v16.17.5
 
 ## License
 
-mit (inherited from upstream itrostack/material_theme)
+MIT. See [LICENSE](./license.txt).

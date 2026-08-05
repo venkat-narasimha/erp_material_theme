@@ -3,7 +3,7 @@ import frappe
 def execute():
     """Add 'Material' option to desk_theme field in User DocType (v16-safe).
 
-    Replaces itrostack's v15-era patch which called `user_doctype.save()`.
+    Replaces the previous v15-era patch which called `user_doctype.save()`.
     Frappe v16 tightened DocType.save() validation, causing a
     `TypeError: first argument must be a string, not bytes` failure.
 

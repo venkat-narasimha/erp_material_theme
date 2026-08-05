@@ -1,9 +1,9 @@
 [project]
-name = "material_theme"
+name = "pb_material"
 authors = [
-    { name = "Itrostack LLP", email = "info@itrostack.com"}
+    { name = "Processbricks", email = "venkatnarasimha@processbricks.com"}
 ]
-description = "Material Theme"
+description = "PB Material — Material Design 3 theme for Frappe"
 requires-python = ">=3.10"
 readme = "README.md"
 dynamic = ["version"]

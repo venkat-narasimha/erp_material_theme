@@ -4,4 +4,4 @@
 
 [post_model_sync]
 # Patches added in this section will be executed after doctypes are migrated
-material_theme.patches.add_theme_setting_user
+pb_material.patches.add_theme_setting_user

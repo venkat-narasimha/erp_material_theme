@@ -1,8 +1,8 @@
-# Installation & Implementation Guide — `erp_material_theme`
+# Installation & Implementation Guide — `pb-material`
 
-This document covers installing and configuring the `material_theme` Frappe app from **Venkat's fork** (`venkat-narasimha/erp_material_theme`) on both **Frappe v15** and **v16**.
+This document covers installing and configuring the `pb_material` Frappe app from **Venkat's fork** (`venkat-narasimha/pb-material`) on both **Frappe v15** and **v16**.
 
-The fork adds v16 compatibility fixes on top of the original itrostack upstream (which targeted v15).
+The fork adds v16 compatibility fixes on top of the upstream (which targeted v15).
 
 ---
 
@@ -34,13 +34,13 @@ The fork adds v16 compatibility fixes on top of the original itrostack upstream 
 
 ## What the fork changes
 
-The fork keeps all of upstream itrostack's CSS/JS and adds three patches for v16 compatibility:
+The fork keeps all of the upstream CSS/JS and adds three patches for v16 compatibility:
 
 | Commit | File | Change |
 |---|---|---|
-| `22a2d3a` | `material_theme/patches/add_theme_setting_user.py` | Switched from `user_doctype.save()` (broken on v16) to `frappe.make_property_setter()` |
-| `4da8646` | `material_theme/patches/add_theme_setting_user.py` | Used `fieldname` kwarg (not v15's `doc_name`), added `ignore_validate=True`, added `frappe.clear_cache(doctype=...)` |
-| `f2a516d` | `material_theme/public/js/theme.js` | Deferred `frappe.ui.ThemeSwitcher` override to `$(document).on("app_ready", ...)` event (v16 loads `app_include_js` before Frappe bundle, so class overrides fail without deferring) |
+| `22a2d3a` | `pb_material/patches/add_theme_setting_user.py` | Switched from `user_doctype.save()` (broken on v16) to `frappe.make_property_setter()` |
+| `4da8646` | `pb_material/patches/add_theme_setting_user.py` | Used `fieldname` kwarg (not v15's `doc_name`), added `ignore_validate=True`, added `frappe.clear_cache(doctype=...)` |
+| `f2a516d` | `pb_material/public/js/theme.js` | Deferred `frappe.ui.ThemeSwitcher` override to `$(document).on("app_ready", ...)` event (v16 loads `app_include_js` before Frappe bundle, so class overrides fail without deferring) |
 
 **Why these patches?** Frappe v16 changed:
 - `DocType.save()` validation tightened (rejects field-option modifications).
@@ -49,7 +49,7 @@ The fork keeps all of upstream itrostack's CSS/JS and adds three patches for v16
 - `validate_fieldtype_change()` strict mode added (needs `ignore_validate=True`).
 - DocType meta cached more aggressively (needs explicit `clear_cache(doctype=...)`).
 
-For full analysis of v16 API quirks, see [`memory/research/2026-08-03-itrostack-material-theme-deep-dive.md`](../) (in OpenClaw workspace; not in this repo).
+For full analysis of v16 API quirks, see [`memory/research/2026-08-03-material-theme-deep-dive.md`](../) (in OpenClaw workspace; not in this repo).
 
 ---
 
@@ -76,12 +76,12 @@ docker exec -u frappe <env>-backend-1 bash -c \
 docker exec -it -u frappe <env>-backend-1 bash
 cd /home/frappe/frappe-bench
 
-# If 503 from GitHub (transient): rm -rf apps/erp_material_theme; sleep 60; retry
-bench get-app https://github.com/venkat-narasimha/erp_material_theme.git
+# If 503 from GitHub (transient): rm -rf apps/pb-material; sleep 60; retry
+bench get-app https://github.com/venkat-narasimha/pb-material.git
 
 # Patch runs automatically during install-app (registered in patches.txt)
-bench --site <site> install-app material_theme
-# Expect: "Updating Dashboard for material_theme" → patch logs "Successfully added ['Material']"
+bench --site <site> install-app pb_material
+# Expect: "Updating Dashboard for pb_material" → patch logs "Successfully added ['Material']"
 
 # Verify patch landed
 bench --site <site> execute 'frappe.get_meta("User").get_field("desk_theme").options'
@@ -93,7 +93,7 @@ bench build
 exit
 ```
 
-### Why `bench build` (not `bench build --app material_theme`)?
+### Why `bench build` (not `bench build --app pb_material`)?
 
 `bench build --app X` only rebuilds app X's assets. Frappe's build process can clean other apps' bundle outputs. After install-app, always run `bench build` (no `--app`) to regenerate all bundles with consistent hashes.
 
@@ -106,8 +106,8 @@ Same procedure as v16. The fork's v16 patches are also v15-safe (verified on `de
 ```bash
 docker exec -it -u frappe <env>-backend-1 bash
 cd /home/frappe/frappe-bench
-bench get-app https://github.com/venkat-narasimha/erp_material_theme.git
-bench --site <site> install-app material_theme
+bench get-app https://github.com/venkat-narasimha/pb-material.git
+bench --site <site> install-app pb_material
 bench --site <site> execute 'frappe.get_meta("User").get_field("desk_theme").options'
 # Expect: Light\nDark\nAutomatic\nMaterial
 bench build
@@ -128,12 +128,12 @@ You must copy new assets from backend → frontend using `docker cp` via a host 
 
 ```bash
 # 1. Stage from backend → host (one directory at a time)
-docker cp <env>-backend-1:/home/frappe/frappe-bench/sites/assets/material_theme/ /tmp/_mt/
+docker cp <env>-backend-1:/home/frappe/frappe-bench/sites/assets/pb_material/ /tmp/_mt/
 docker cp <env>-backend-1:/home/frappe/frappe-bench/sites/assets/assets.json /tmp/_assets.json
 docker cp <env>-backend-1:/home/frappe/frappe-bench/sites/assets/assets-rtl.json /tmp/_assets-rtl.json
 
 # 2. Push from host → frontend (same pattern)
-docker cp /tmp/_mt/. <env>-frontend-1:/home/frappe/frappe-bench/sites/assets/material_theme/
+docker cp /tmp/_mt/. <env>-frontend-1:/home/frappe/frappe-bench/sites/assets/pb_material/
 docker cp /tmp/_assets.json <env>-frontend-1:/home/frappe/frappe-bench/sites/assets/assets.json
 docker cp /tmp/_assets-rtl.json <env>-frontend-1:/home/frappe/frappe-bench/sites/assets/assets-rtl.json
 
@@ -173,9 +173,9 @@ sleep 5
 
 ### Pitfall #1: `bench build --app X` wipes other apps' assets
 
-`bench build --app material_theme` rebuilds only material_theme. Frappe's build process can clean other apps' bundle output. After install-app, **always run `bench build` (no `--app`)** to regenerate all bundles.
+`bench build --app pb_material` rebuilds only pb_material. Frappe's build process can clean other apps' bundle output. After install-app, **always run `bench build` (no `--app`)** to regenerate all bundles.
 
-**Symptom:** Browser shows 404 (or 502 if nginx proxies asset requests to backend) for `desk.bundle.*.css`, `erpnext.bundle.*.css`, etc., even though material_theme assets load fine.
+**Symptom:** Browser shows 404 (or 502 if nginx proxies asset requests to backend) for `desk.bundle.*.css`, `erpnext.bundle.*.css`, etc., even though pb_material assets load fine.
 
 **Fix:** `bench build` (all apps), then per-directory asset sync.
 
@@ -195,11 +195,11 @@ The named `sites` volume covers the parent path but the anonymous volumes shadow
 
 **Fix:** Per-directory `docker cp` from backend → host → frontend (see [Asset sync](#asset-sync-mandatory-after-install)).
 
-### Pitfall #3: `ModuleNotFoundError: No module named 'material_theme'` after install
+### Pitfall #3: `ModuleNotFoundError: No module named 'pb_material'` after install
 
-Backend gunicorn workers were running **before** `bench install-app material_theme`. Their Python env doesn't have the new module. `bench install-app` adds it to the env, but workers don't reload.
+Backend gunicorn workers were running **before** `bench install-app pb_material`. Their Python env doesn't have the new module. `bench install-app` adds it to the env, but workers don't reload.
 
-**Symptom:** 500 on every endpoint. Traceback: `ModuleNotFoundError: No module named 'material_theme'` in `_load_app_hooks()`.
+**Symptom:** 500 on every endpoint. Traceback: `ModuleNotFoundError: No module named 'pb_material'` in `_load_app_hooks()`.
 
 **Fix:**
 ```bash
@@ -268,11 +268,11 @@ docker exec <env>-backend-1 bench --site <site> execute \
 # Expect: Light\nDark\nAutomatic\nMaterial
 
 # 2. Material assets exist on backend
-docker exec <env>-backend-1 ls /home/frappe/frappe-bench/sites/assets/material_theme/
+docker exec <env>-backend-1 ls /home/frappe/frappe-bench/sites/assets/pb_material/
 # Expect: css  js
 
 # 3. Material assets synced to frontend
-docker exec <env>-frontend-1 ls /home/frappe/frappe-bench/sites/assets/material_theme/
+docker exec <env>-frontend-1 ls /home/frappe/frappe-bench/sites/assets/pb_material/
 # Expect: css  js
 
 # 4. API healthy
@@ -283,7 +283,7 @@ curl -sk -I -H 'Host: <site>' https://<site>/api/method/ping
 # - Hard reload https://<site>/desk (Ctrl+Shift+R)
 # - Login as Administrator
 # - Press Shift+Ctrl+G (theme picker shortcut)
-# - Look for "Material by Itrostack" card
+# - Look for "Material by Processbricks" card
 # - Click → theme renders
 ```
 
@@ -293,23 +293,23 @@ curl -sk -I -H 'Host: <site>' https://<site>/api/method/ping
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `ModuleNotFoundError: No module named 'material_theme'` | Backend workers not restarted | [Pitfall #3](#pitfall-3-modulenotfounderror-no-module-named-material_theme-after-install) |
+| `ModuleNotFoundError: No module named 'pb_material'` | Backend workers not restarted | [Pitfall #3](#pitfall-3-modulenotfounderror-no-module-named-pb_material-after-install) |
 | All assets 404 / 502 after install | Asset volume shadowing | [Pitfall #2](#pitfall-2-asset-volume-shadowing) + asset sync |
 | Random 502 on `/api/` calls | Frontend nginx upstream hostname mismatch | [Pitfall #4](#pitfall-4-frontend-nginx-upstream-points-to-wrong-hostnames) |
 | 404 on `/socket.io/` polling | clawb-nginx missing `location /socket.io` | [Pitfall #5](#pitfall-5-clawb-nginx-missing-location-socketio) |
-| `bench get-app` 503 from GitHub | Transient GitHub rate limit | `rm -rf apps/erp_material_theme; sleep 60; retry` |
+| `bench get-app` 503 from GitHub | Transient GitHub rate limit | `rm -rf apps/pb-material; sleep 60; retry` |
 | `docker cp container:path container:path` errors with "copying between containers is not supported" | Cross-container cp unsupported | [Pitfall #6](#pitfall-6-bulk-docker-cp-cross-container) |
 | Theme picker doesn't show Material option after install | Patch didn't run | `bench --site <site> execute 'frappe.clear_cache(doctype="User")'` then re-check |
 | Theme renders blank/unstyled | Material assets not on frontend | Re-run [Asset sync](#asset-sync-mandatory-after-install) |
-| `patch` not run during install | patches.txt not committed | Verify `cat material_theme/patches.txt` shows `material_theme.patches.add_theme_setting_user` |
+| `patch` not run during install | patches.txt not committed | Verify `cat pb_material/patches.txt` shows `pb_material.patches.add_theme_setting_user` |
 
 ---
 
 ## Reference: project history
 
-This fork was created to make the upstream itrostack material_theme (last pushed 2025-08-04, MIT-licensed, vendored Apache-2.0 Material Color Utilities) work on **Frappe v16**.
+This fork was created to make the upstream repo (last pushed 2025-08-04, MIT-licensed, vendored Apache-2.0 Material Color Utilities) work on **Frappe v16**.
 
-**Original research:** `memory/research/2026-08-03-itrostack-material-theme-deep-dive.md` (full code analysis, license confirmation, why fork was needed).
+**Original research:** `memory/research/2026-08-03-material-theme-deep-dive.md` (full code analysis, license confirmation, why fork was needed).
 
 **Install runbook:** `memory/projects/2026-08-03-material-theme-install.md` (timeline of pberpDEV install with all 5 patch iterations, debugging, recovery).
 
@@ -322,14 +322,14 @@ This fork was created to make the upstream itrostack material_theme (last pushed
 | Item | Value |
 |---|---|
 | Upstream | https://github.com/itrostack/material_theme |
-| Fork | https://github.com/venkat-narasimha/erp_material_theme |
+| Fork | https://github.com/venkat-narasimha/pb-material |
 | First v16 fix commit | `22a2d3a` |
 | Current v16 patch (v5) | `4da8646` |
 | Current v16 JS override | `f2a516d` |
-| Patch file | `material_theme/patches/add_theme_setting_user.py` |
-| JS override file | `material_theme/public/js/theme.js` |
-| Patch registration | `material_theme/patches.txt` (in `[post_model_sync]` section) |
-| Theme switch override | `material_theme/overrides/switch_theme.py` (registered in `hooks.py`) |
+| Patch file | `pb_material/patches/add_theme_setting_user.py` |
+| JS override file | `pb_material/public/js/theme.js` |
+| Patch registration | `pb_material/patches.txt` (in `[post_model_sync]` section) |
+| Theme switch override | `pb_material/overrides/switch_theme.py` (registered in `hooks.py`) |
 
 ### What the patch does
 
@@ -337,7 +337,7 @@ Adds `"Material"` to the `User.desk_theme` field options via `frappe.make_proper
 
 ### What the JS override does
 
-Injects a "Material by Itrostack" card into Frappe's theme picker (which is now card-based in v16+, not dropdown). Hooks into Frappe's `app_ready` event (fired after `frappe.Application.startup()`) so the class extension override isn't clobbered by v16's earlier `app_include_js` loading order.
+Injects a "Material by Processbricks" card into Frappe's theme picker (which is now card-based in v16+, not dropdown). Hooks into Frappe's `app_ready` event (fired after `frappe.Application.startup()`) so the class extension override isn't clobbered by v16's earlier `app_include_js` loading order.
 
 ### What the `switch_theme` override does
 

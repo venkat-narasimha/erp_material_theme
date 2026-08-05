@@ -8,7 +8,7 @@ $(document).on("toolbar_setup", function () {
 	{
 		return;
 	}
-	var themeColor = localStorage.getItem("ItrostackThemeColor");
+	var themeColor = localStorage.getItem("pbMaterialThemeColor");
 	if(themeColor)
 		applyMaterialTheme(themeColor);
 	render_clear_demo_action();
@@ -44,14 +44,14 @@ function applyMaterialTheme(SelectedColor)
 	applyTheme(theme, {target: document.body});
 	
 	const color = hexFromArgb(theme.schemes.light.primary);
-	localStorage.setItem("ItrostackThemeColor", color);
+	localStorage.setItem("pbMaterialThemeColor", color);
 	
 	//Setting the primary color for frappe.
 	r.style.setProperty('--primary', color);
 }
 
 material.theme.clear_demo = function () {
-	var themeColor = localStorage.getItem("ItrostackThemeColor");
+	var themeColor = localStorage.getItem("pbMaterialThemeColor");
 	if(!themeColor)
 		themeColor = "#3C6090";
 	// new dialog

@@ -1,4 +1,4 @@
-// material_theme — Material Design 3 theme for Frappe v16
+// pb_material — Material Design 3 theme for Frappe v16
 //
 // v16 fix (2026-08-03): defer the override until Frappe has finished loading.
 //
@@ -27,8 +27,8 @@ $(document).on("app_ready", function () {
 				if (!this.themes.find((t) => t.name === "material")) {
 					this.themes.push({
 						name: "material",
-						label: "Material by Itrostack",
-						info: "Theme by Itrostack LLP",
+						label: "Material by Processbricks",
+						info: "Theme by Processbricks",
 					});
 				}
 				return this.themes;

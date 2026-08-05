@@ -1,5 +1,5 @@
 "use strict";
-frappe.provide("itrostack.material");
+frappe.provide("pb_material.material");
   //Code for Material Color Generation from google
   //refer https://www.npmjs.com/package/@material/material-color-utilities for details.
   function signum(num) {
