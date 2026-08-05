@@ -52,6 +52,17 @@ app_include_js = [
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
+# Fixtures
+# ------------
+#
+# List of document types for which fixtures should be exported to
+# apps/pb_material/fixtures/ when `bench export-fixtures` is run.
+# Required by deployment discipline rule #9 — ensures customizations
+# travel with the app code instead of living only in dev DB.
+#
+fixtures = ["Property Setter", "Custom Field"]
+
+
 # Svg Icons
 # ------------------
 # include app icons in desk
