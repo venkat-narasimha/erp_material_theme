@@ -118,7 +118,7 @@ exit
 
 ---
 
-## Asset sync (mandatory after install)
+## Asset sync (mandatory after every `bench build`)
 
 After `bench build` on the backend, the frontend container still serves the **image's prebuilt assets** because Docker creates **separate anonymous volumes** for `/sites/assets` on backend and frontend (see [Pitfall #2](#pitfall-2-asset-volume-shadowing)).
 
@@ -126,34 +126,25 @@ You must copy new assets from backend → frontend using `docker cp` via a host 
 
 **Always per-directory copy. Never bulk copy.**
 
+**Sync ALL bundle directories**, not just the new app — `bench build` (no `--app` flag) regenerates hashes for **every** app's bundles (frappe, erpnext, pb_material). Even if frappe/erpnext code didn't change, their bundle output hashes may shift because the build is not deterministic across runs. Sync all three to be safe.
+
 ```bash
 # 1. Stage from backend → host (one directory at a time)
-docker cp <env>-backend-1:/home/frappe/frappe-bench/sites/assets/pb_material/ /tmp/_mt/
+docker cp <env>-backend-1:/home/frappe/frappe-bench/sites/assets/frappe/ /tmp/_frappe/
+docker cp <env>-backend-1:/home/frappe/frappe-bench/sites/assets/erpnext/ /tmp/_erpnext/
+docker cp <env>-backend-1:/home/frappe/frappe-bench/sites/assets/pb_material/ /tmp/_pbm/
 docker cp <env>-backend-1:/home/frappe/frappe-bench/sites/assets/assets.json /tmp/_assets.json
 docker cp <env>-backend-1:/home/frappe/frappe-bench/sites/assets/assets-rtl.json /tmp/_assets-rtl.json
 
-# 2. Push from host → frontend (same pattern)
-docker cp /tmp/_mt/. <env>-frontend-1:/home/frappe/frappe-bench/sites/assets/pb_material/
+# 2. Push from host → frontend (same pattern, per-directory)
+docker cp /tmp/_frappe/. <env>-frontend-1:/home/frappe/frappe-bench/sites/assets/frappe/
+docker cp /tmp/_erpnext/. <env>-frontend-1:/home/frappe/frappe-bench/sites/assets/erpnext/
+docker cp /tmp/_pbm/. <env>-frontend-1:/home/frappe/frappe-bench/sites/assets/pb_material/
 docker cp /tmp/_assets.json <env>-frontend-1:/home/frappe/frappe-bench/sites/assets/assets.json
 docker cp /tmp/_assets-rtl.json <env>-frontend-1:/home/frappe/frappe-bench/sites/assets/assets-rtl.json
 
 # 3. Cleanup
-rm -rf /tmp/_mt /tmp/_assets.json /tmp/_assets-rtl.json
-```
-
-For per-app bundle sync (after `bench build` of all apps):
-
-```bash
-# Stage frappe bundle
-docker cp <env>-backend-1:/home/frappe/frappe-bench/sites/assets/frappe/ /tmp/_frappe/
-docker cp /tmp/_frappe/. <env>-frontend-1:/home/frappe/frappe-bench/sites/assets/frappe/
-
-# Stage erpnext bundle
-docker cp <env>-backend-1:/home/frappe/frappe-bench/sites/assets/erpnext/ /tmp/_erpnext/
-docker cp /tmp/_erpnext/. <env>-frontend-1:/home/frappe/frappe-bench/sites/assets/erpnext/
-
-# Cleanup
-rm -rf /tmp/_frappe /tmp/_erpnext
+rm -rf /tmp/_frappe /tmp/_erpnext /tmp/_pbm /tmp/_assets.json /tmp/_assets-rtl.json
 ```
 
 **Why per-directory?** Bulk `docker cp container:path container:path` is **not supported** by Docker (error: `copying between containers is not supported`). Tar-pipe (`docker exec container1 tar | docker exec container2 tar`) is fragile — silent skip is common on anonymous volumes. Host intermediate + per-directory is the proven method.
@@ -208,8 +199,11 @@ sleep 10
 # Also restart frontend to clear nginx DNS cache (lesson from 2026-08-03):
 docker restart <env>-frontend-1
 sleep 5
-curl -sk -I -H 'Host: <site>' https://<site>/api/method/ping
-# Expect: HTTP/1.1 200 OK
+# Frappe v16 ships OAuth2 Resource Server active. /api/method/ping returns 403
+# unless you have a Bearer token or session cookie. Use the public desk login page
+# or browser for smoke test instead:
+curl -sk -I -H 'Host: <site>' https://<site>/login
+# Expect: HTTP/1.1 200 OK  (login page HTML)
 ```
 
 ### Pitfall #4: Frontend nginx upstream points to wrong hostnames
@@ -276,8 +270,11 @@ docker exec <env>-frontend-1 ls /home/frappe/frappe-bench/sites/assets/pb_materi
 # Expect: css  js
 
 # 4. API healthy
-curl -sk -I -H 'Host: <site>' https://<site>/api/method/ping
-# Expect: HTTP/1.1 200 OK
+# Frappe v16 ships OAuth2 Resource Server active. /api/method/ping returns 403
+# unless you have a Bearer token or session cookie. Use the public desk login page
+# or browser for smoke test instead:
+curl -sk -I -H 'Host: <site>' https://<site>/login
+# Expect: HTTP/1.1 200 OK  (login page HTML)
 
 # 5. Browser
 # - Hard reload https://<site>/desk (Ctrl+Shift+R)
@@ -302,6 +299,41 @@ curl -sk -I -H 'Host: <site>' https://<site>/api/method/ping
 | Theme picker doesn't show Material option after install | Patch didn't run | `bench --site <site> execute 'frappe.clear_cache(doctype="User")'` then re-check |
 | Theme renders blank/unstyled | Material assets not on frontend | Re-run [Asset sync](#asset-sync-mandatory-after-install) |
 | `patch` not run during install | patches.txt not committed | Verify `cat pb_material/patches.txt` shows `pb_material.patches.add_theme_setting_user` |
+
+---
+
+## Fixtures export (rule #9 — mandatory)
+
+After `bench install-app` succeeds and you've smoke-tested in the browser, export
+customizations as fixtures so they travel with the app code instead of living only
+in the dev DB.
+
+```bash
+# Inside backend container, as frappe user
+bench --site <site> export-fixtures
+
+# Verify what was dumped
+ls apps/pb_material/fixtures/
+# Expect at least: custom_field.json  property_setter.json
+# (depends on what customizations exist on the site)
+
+# Commit + push the fixtures to the repo
+cd apps/pb_material
+git add fixtures/
+git commit -m "feat(fixtures): export customizations (rule #9)"
+git push origin main
+```
+
+**Why?** Without fixtures, fresh installs on QA/PROD get only what the patch creates
+at runtime. The patch is idempotent and covers the desk_theme Property Setter, but
+fixtures are belt-and-suspenders — survive patch migration logic changes, schema drift,
+and accidental patch deletion.
+
+**Requirements:** `pb_material/hooks.py` must declare what to export:
+```python
+fixtures = ["Property Setter", "Custom Field"]
+```
+Already set in this repo. If you fork, copy this line.
 
 ---
 
