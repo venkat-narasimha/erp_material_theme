@@ -1,186 +1,279 @@
-// pb_material — v16 user dropdown hijack
-// Purpose: Add "Change Theme Color" to the v16 user menu EVERYWHERE
-//   (v16 redesigned the user UI — the user button now lives in the sidebar and
-//   no longer opens a dropdown by default. Instead it routes to the user profile
-//   form. This file hijacks the sidebar user button to show a Frappe menu
-//   containing the same items as the desktop home page dropdown, plus
-//   "Change Theme Color".)
+// pb_material — top-right palette icon + sidebar header menu item (v16)
 //
-// v15 behavior is unchanged — see material-theme-customizer.js for the legacy
-// `#toolbar-user` append path.
+// PURPOSE
+//   Surfaces the "Change Theme Color" action everywhere in v16.
+//   Click → opens the PB Material color picker (material.theme.clear_demo).
+//
+// UX MAP
+//   Page type        Where it lives
+//   ─────────────    ─────────────────────────────────────────────
+//   Home (desktop)   Top-right icon (prepended to .desktop-avatar)
+//   Workspace        Sidebar header dropdown (the v15-style menu with
+//                    Session Defaults, Toggle Theme, Logout etc.)
+//   Form / List      Top-right icon (.navbar-right) where present
+//
+// WHY NOT THE DROPDOWN-HIJACK FROM EARLIER TODAY
+//   First attempts monkey-patched v16's SidebarHeader.dropdown_items
+//   and DesktopPage.desktop_menu_items — both internal APIs that
+//   broke on the smallest change (e.g., a header.attr() call treating
+//   a class instance as a jQuery object). This version uses:
+//   - stable CSS class names (.navbar-right, .desktop-avatar)
+//   - public class instance properties/methods of SidebarHeader
+//     (the menu dropdown_items array, populate_dropdown_menu())
+//   These are stable enough to ride through v16 minor versions
+//   without breakage; if Frappe refactors the sidebar header class
+//   entirely, the patch is a one-line update.
+//
+// TIMING
+//   app_ready fires when the desk is ready, but workspace pages
+//   render the top navbar ASYNCHRONOUSLY after app_ready. The
+//   retry_window() polls for ~2s after app_ready, idempotently
+//   adding the icon as soon as the navbar appears. Subsequent
+//   navigations are handled by the route-change listener.
+//
+// LOADING ORDER
+//   This file must load AFTER material-theme-customizer.js (which
+//   defines material.theme.clear_demo). hooks.py order guarantees this.
 
 (function () {
 	"use strict";
 
 	if (typeof window.frappe === "undefined") {
-		// frappe not loaded yet — bail
 		return;
 	}
 
-	const PB_USER_BTN_ATTR = "data-pb-patched";
+	const BTN_CLASS = "pb-material-theme-color-btn";
+	const TOOLTIP = __("Change Theme Color");
+	const CLICK_NS = ".pb-material-theme-color";
+	const SIDEBAR_HEADER_ITEM_NAME = "pb-material-change-theme-color";
+	let _clickBound = false;
+	let _retryHandle = null;
 
 	// ----------------------------------------------------------------
-	// Build the v16 user menu items.
-	// Mirrors frappe.desk.page.desktop.desktop.js::setup_avatar() so the
-	// sidebar user menu matches the desktop home page user menu. The single
-	// difference is the extra "Change Theme Color" item.
+	// Icon — use Frappe's standard SVG icon renderer if available.
 	// ----------------------------------------------------------------
-	function get_user_menu_items() {
-		const is_dark =
-			document.documentElement.getAttribute("data-theme") === "dark";
-
-		const items = [
-			{
-				icon: "edit",
-				label: __("Edit Profile"),
-				url: `/desk/user/${frappe.session.user}`,
-			},
-			{
-				icon: is_dark ? "sun" : "moon",
-				label: __("Toggle Theme"),
-				onClick: function () {
-					new frappe.ui.ThemeSwitcher().show();
-				},
-			},
-			{
-				icon: "palette",
-				label: __("Change Theme Color"),
-				onClick: function () {
-					// material.theme.clear_demo is defined in
-					// material-theme-customizer.js and opens the color picker.
-					if (window.material && material.theme && material.theme.clear_demo) {
-						material.theme.clear_demo();
-					} else {
-						frappe.msgprint({
-							title: __("Theme customizer not loaded"),
-							message: __(
-								"PB Material color picker is unavailable. The site theme is set, but the color picker UI did not initialize. Please refresh the page."
-							),
-							indicator: "orange",
-						});
-					}
-				},
-			},
-			{
-				icon: "info",
-				label: __("About"),
-				onClick: function () {
-					return frappe.ui.toolbar.show_about();
-				},
-			},
-			{
-				icon: "support",
-				label: __("Frappe Support"),
-				onClick: function () {
-					window.open("https://support.frappe.io/help", "_blank");
-				},
-			},
-			{
-				icon: "rotate-ccw",
-				label: __("Reset Desktop Layout"),
-				onClick: function () {
-					frappe.call({
-						method:
-							"frappe.desk.doctype.desktop_layout.desktop_layout.delete_layout",
-						callback: function () {
-							frappe.ui.toolbar.clear_cache();
-						},
-					});
-				},
-			},
-			{
-				icon: "log-out",
-				label: __("Logout"),
-				onClick: function () {
-					frappe.app.logout();
-				},
-			},
-		];
-
-		return items;
+	function get_icon_svg() {
+		if (typeof frappe.utils.icon === "function") {
+			return frappe.utils.icon("palette", "md");
+		}
+		return (
+			'<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" ' +
+			'aria-hidden="true">' +
+			'<path d="M8 1a7 7 0 1 0 0 14 .5.5 0 0 0 .5-.5v-1a.5.5 0 0 1 .5-.5h1.5a2.5 2.5 0 0 0 0-5H10a.5.5 0 0 1-.5-.5v-1A.5.5 0 0 0 9 1H8z"/>' +
+			"</svg>"
+		);
 	}
 
 	// ----------------------------------------------------------------
-	// Hijack the sidebar user button to show our menu instead of
-	// routing to the user profile form.
+	// Open the color picker (defined in material-theme-customizer.js).
 	// ----------------------------------------------------------------
-	function show_user_menu($trigger) {
-		if (typeof frappe.ui.create_menu !== "function") {
-			// Defensive — frappe menu not available
-			frappe.set_route("Form", "User", frappe.session.user);
-			return;
+	function open_picker() {
+		if (
+			window.material &&
+			material.theme &&
+			typeof material.theme.clear_demo === "function"
+		) {
+			material.theme.clear_demo();
+		} else {
+			console.warn(
+				"[pb-material] color picker not loaded. Ensure " +
+					"material-theme-customizer.js loads before " +
+					"theme-customizer-v16.js."
+			);
+		}
+	}
+
+	// ----------------------------------------------------------------
+	// Build the top-right icon button HTML.
+	// ----------------------------------------------------------------
+	function make_icon_button_html() {
+		return (
+			'<a class="' +
+			BTN_CLASS +
+			' btn btn-reset"' +
+			' title="' +
+			TOOLTIP +
+			'"' +
+			' aria-label="' +
+			TOOLTIP +
+			'"' +
+			' href="#"' +
+			' role="button">' +
+			get_icon_svg() +
+			"</a>"
+		);
+	}
+
+	// ----------------------------------------------------------------
+	// Path A: top navbar (form, list pages where .navbar-right exists)
+	// ----------------------------------------------------------------
+	function patch_top_navbar() {
+		const $nav = $(".navbar-right");
+		if (
+			$nav.length &&
+			!$nav.find("." + BTN_CLASS).length
+		) {
+			$nav.append(
+				'<li class="nav-item pb-material-theme-color-wrapper">' +
+					make_icon_button_html() +
+					"</li>"
+			);
+			return true;
+		}
+		return false;
+	}
+
+	// ----------------------------------------------------------------
+	// Path B: home page (where top navbar is hidden, .desktop-avatar
+	// is the right-side user element)
+	// ----------------------------------------------------------------
+	function patch_home_page() {
+		const $avatar = $(".desktop-avatar");
+		if (
+			$avatar.length &&
+			!$avatar.parent().find("." + BTN_CLASS).length
+		) {
+			$avatar.before(make_icon_button_html());
+			return true;
+		}
+		return false;
+	}
+
+	// ----------------------------------------------------------------
+	// Path C: workspace pages (no top navbar, but the sidebar header
+	// dropdown hosts the v15-style user menu — Desktop, Workspaces,
+	// Session Defaults, Toggle Theme, Logout). We add a "Change
+	// Theme Color" item to that dropdown, inserted just before the
+	// Logout entry (matching v15 placement).
+	//
+	// Returns true if a patch was applied (or already applied),
+	// false if the sidebar header isn't available yet.
+	// ----------------------------------------------------------------
+	function patch_sidebar_header_dropdown() {
+		const sidebar = frappe.app && frappe.app.sidebar;
+		const header = sidebar && sidebar.sidebar_header;
+		if (
+			!header ||
+			!Array.isArray(header.dropdown_items) ||
+			typeof header.add_app_item !== "function" ||
+			!header.dropdown_menu
+		) {
+			return false;
 		}
 
-		frappe.ui.create_menu({
-			parent: $trigger.parent(),
-			menu_items: get_user_menu_items(),
-			open_on_left: !frappe.utils.is_rtl(),
-		});
-	}
-
-	function patch_sidebar_user_button() {
-		const $btn = $(".dropdown-navbar-user .sidebar-user-button");
-		if ($btn.length === 0) return false; // not v16 sidebar (or not rendered yet)
-		if ($btn.attr(PB_USER_BTN_ATTR) === "1") return true; // already patched
-
-		$btn.attr(PB_USER_BTN_ATTR, "1");
-		// Strip the inline onclick that calls frappe.ui.toolbar.route_to_user
-		$btn.removeAttr("onclick");
-		$btn.off("click").on("click", function (e) {
-			e.preventDefault();
-			e.stopPropagation();
-			show_user_menu($(this));
-		});
-		return true;
-	}
-
-	// ----------------------------------------------------------------
-	// Add "Change Theme Color" to the desktop home page dropdown.
-	// This is a v16-only public extension point: add_menu_item().
-	// (See frappe.desk.page.desktop.desktop.js)
-	// ----------------------------------------------------------------
-	function patch_desktop_home_dropdown() {
-		if (!frappe.pages || !frappe.pages["desktop"]) return false;
-		const page = frappe.pages["desktop"].desktop_page;
-		if (!page || typeof page.add_menu_item !== "function") return false;
-
-		const already = (page.desktop_menu_items || []).some(
-			(i) => i.label === "Change Theme Color"
+		// Idempotency: check the source-of-truth array, not a jQuery attr.
+		const already_registered = header.dropdown_items.some(
+			(d) => d && d.name === SIDEBAR_HEADER_ITEM_NAME
 		);
-		if (already) return true;
 
-		page.add_menu_item({
-			icon: "palette",
-			label: __("Change Theme Color"),
-			onClick: function () {
-				if (window.material && material.theme && material.theme.clear_demo) {
-					material.theme.clear_demo();
-				}
-			},
-		});
+		if (!already_registered) {
+			const item = {
+				name: SIDEBAR_HEADER_ITEM_NAME,
+				label: __("Change Theme Color"),
+				icon: "palette",
+				is_standard: 1,
+				onClick: function () {
+					open_picker();
+				},
+			};
+
+			// Insert just before the "logout" entry so it sits at the
+			// bottom of the user section (like v15).
+			const logout_idx = header.dropdown_items.findIndex(
+				(d) => d && d.name === "logout"
+			);
+			if (logout_idx >= 0) {
+				header.dropdown_items.splice(logout_idx, 0, item);
+			} else {
+				header.dropdown_items.push(item);
+			}
+		}
+
+		// Re-render the menu DOM. populate_dropdown_menu() appends to
+		// this.dropdown_menu without clearing; we empty first to avoid
+		// duplicates. Then re-bind click handlers.
+		if (typeof header.dropdown_menu.empty === "function") {
+			header.dropdown_menu.empty();
+		}
+		if (typeof header.populate_dropdown_menu === "function") {
+			header.populate_dropdown_menu();
+		}
+		if (typeof header.setup_select_options === "function") {
+			header.setup_select_options();
+		}
 		return true;
 	}
 
 	// ----------------------------------------------------------------
-	// Run all patches. Idempotent — safe to call multiple times.
+	// Click handler (delegated on document — survives re-renders).
 	// ----------------------------------------------------------------
-	function run_patches() {
-		patch_sidebar_user_button();
-		patch_desktop_home_dropdown();
+	function bind_click_once() {
+		if (_clickBound) return;
+		$(document).on(
+			"click" + CLICK_NS,
+			"." + BTN_CLASS,
+			function (e) {
+				e.preventDefault();
+				open_picker();
+			}
+		);
+		// Sidebar header items are bound by setup_select_options() above
+		// (the menu re-render calls it). No extra binding needed here.
+		_clickBound = true;
 	}
 
-	// Fire when the desk app is ready.
+	// ----------------------------------------------------------------
+	// Run all patches.
+	// ----------------------------------------------------------------
+	function patch() {
+		patch_top_navbar();
+		patch_home_page();
+		patch_sidebar_header_dropdown();
+		bind_click_once();
+	}
+
+	// ----------------------------------------------------------------
+	// Retry window: app_ready fires before the workspace navbar is
+	// rendered. Poll for ~2s to catch late-rendering elements.
+	// Idempotent — once any path is satisfied, further calls no-op.
+	// ----------------------------------------------------------------
+	function start_retry_window(duration_ms) {
+		if (_retryHandle) return;
+		const start = Date.now();
+		_retryHandle = setInterval(function () {
+			patch();
+			const elapsed = Date.now() - start;
+			const any_icon =
+				$("." + BTN_CLASS).length > 0;
+			const any_menu_item =
+				frappe.app &&
+				frappe.app.sidebar &&
+				frappe.app.sidebar.sidebar_header &&
+				frappe.app.sidebar.sidebar_header.dropdown_items &&
+				frappe.app.sidebar.sidebar_header.dropdown_items.some(
+					(d) => d && d.name === SIDEBAR_HEADER_ITEM_NAME
+				);
+			if (elapsed >= duration_ms || (any_icon && any_menu_item)) {
+				clearInterval(_retryHandle);
+				_retryHandle = null;
+			}
+		}, 150);
+	}
+
+	// ----------------------------------------------------------------
+	// Wire up the events.
+	// ----------------------------------------------------------------
 	$(document).on("app_ready", function () {
-		run_patches();
+		patch();
+		start_retry_window(2000);
 	});
 
-	// Re-fire on SPA route changes. Frappe does not fully reload pages
-	// when navigating between forms, but it can re-render the sidebar
-	// user button. The PB_USER_BTN_ATTR check makes this safe.
 	if (frappe.router && typeof frappe.router.on === "function") {
 		frappe.router.on("change", function () {
-			// Small delay so the new route's DOM is in place.
-			setTimeout(run_patches, 100);
+			setTimeout(function () {
+				patch();
+				start_retry_window(1500);
+			}, 50);
 		});
 	}
 })();
